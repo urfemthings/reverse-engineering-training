@@ -1,5 +1,5 @@
+cat > cheatsheet.txt << 'EOF'
 === SEMUA COMMAND LEVEL 1-9 - REVERSE ENGINEERING ===
-Simpan sebagai: cheatsheet.txt
 
 --- LEVEL 1-4 : STATIC ---
 file ./levelX
@@ -35,28 +35,78 @@ continue
 disas main
 x/17xb $rbp-0x30
 
---- LEVEL 8-9 : PIE + ANTI-DEBUG LENGKAP ---
-set logging file hasil_gdb.txt
+--- LEVEL 8 : PIE + GDB LOGGING ---
+set logging file hasil_gdb8.txt
 set logging overwrite on
 set logging on
 set pagination off
-
-file latihan9
+file latihan8
 starti
 info proc mappings
 break *BASE+OFFSET_GHIDRA
 # contoh: break *0x555555555292
 run
 continue
+x/43xb 0x555555558080
 
-stepi   # bukan call, 1 langkah
-nexti   # kalo call, loncatin
+--- LEVEL 9 : LENGKAP - PIE + PTRACE + TRACERPID + XOR EVOLVE ---
+# Ini yang kemarin belum lengkap!
+
+# 1. Cek anti-debug dulu
+cat /proc/self/status | grep TracerPid
+# Kalo di GDB, TracerPid != 0 = kedetect
+
+# 2. GDB Setup
+gdb ./latihan9
+set pagination off
+set logging file hasil_gdb9.txt
+set logging overwrite on
+set logging on
+
+# 3. Bypass ptrace pertama
+break ptrace
+run
+set $rax = 0
+continue
+
+# 4. Cari BASE PIE
+starti
+info proc mappings
+# Catat BASE, contoh: 0x555555554000
+
+# 5. Break di main (BASE + OFFSET GHIDRA)
+break *0x555555555292
+continue
+
+# 6. Di dalam main, bypass TracerPid check
+# Cari cmp TracerPid / open /proc/self/status
+# Kalo ketemu jne -> set $eflags biar lolos
+# atau: set $rax = 0 pas baca TracerPid
+
+# 7. Dump target & decrypt
+x/43xb $rbp-0x30
+# Atau pake alamat absolut:
+x/43xb 0x555555558080
+
+# 8. Decrypt di Python (Level 9)
+# key awal dari Ghidra, rumus: key = key * 7 + 0x15
+python3 -c "
+data = [0x.., 0x..]  # isi dari x/43xb
+key = 0x??  # key awal
+out = ''
+for b in data:
+    out += chr(b ^ key)
+    key = (key * 7 + 0x15) & 0xFF
+print(out)
+"
+
+# Navigasi GDB
+stepi   # 1 langkah, MASUK ke call
+nexti   # 1 langkah, LONCATIN call
 finish  # keluar fungsi
-
 x/40i $pc
 x/s $rdi
 x/20xw $rsp
-x/43xb 0x555555558080
 
 --- UNIVERSAL : BISA DIMANA AJA ---
 gdb -batch -ex "break main" -ex "run" -ex "info locals" -ex "info registers" -ex "x/100xb $rsp" ./NAMA_FILE
@@ -75,6 +125,18 @@ ptrace/TracerPid/rdtsc = anti-debug
 
 --- GITIGNORE BUAT GITHUB ---
 *.out
-latihan*
-hasil_gdb.txt
-*.exe
+*.o
+*.so
+hasil_gdb*.txt
+latihan
+latihan2b
+latihan3
+latihan4
+latihan5
+latihan6
+latihan7v1
+latihan8
+latihan9
+bypass
+EOF
+cat cheatsheet.txt
