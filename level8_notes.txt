@@ -1,0 +1,3 @@
+The program has no registers now.
+warning: Error detected on fd 0
+error detected on stdin
